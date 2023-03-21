@@ -1,85 +1,149 @@
-# 编写一个战士（Warrior）类，内容如下：
-# 1，创建类属性生命值上限(life_max)，生命上限值可以不等于生命值
-import os
-import time
-class warrior:
-    life_max = 100
-# 2, 创建私有实例属性:姓名(name)，生命值(life)，攻击力(ATK)，防御力(DEF)，
-# 3, 要求使用有参构造方式，初始化所有属性,如果初始化中生命值大于生命值上限，强制变为生命值上限
-    def __init__(self,NAME,LIFE,ATK,DEF):
-        self.__NAME = NAME
-        
-        if LIFE > warrior.life_max:
-            self.__LIFE = 100
-            self.basiclife = 100
-        else:
-            self.__LIFE = LIFE 
-            self.basiclife = LIFE
-        self.__ATK = ATK 
-        self.__DEF = DEF
-    
-# 4，创建实例方法 attack(self,Warrior)， 参数为战士类,功能如下:
-    def attack(self,warrior):
-# （1）显示谁攻击谁
-        print('[{}]攻击[{}]'.format(self.__NAME,warrior.__NAME))
-# （2）如果对方生命值少于等于0，显示[XX] 已经挂了，攻击无效！
-        if warrior.__LIFE <= 0:
-            print('[{}]已经死了,攻击无效\n[{}]胜利,战斗结束'.format(warrior.__NAME,self.__NAME))
-            os._exit(0)
+import openai
+import requests 
+import json
+import time 
 
-# （3）如果对方生命值大于0，计算伤害，攻击力减去防御力等于最终伤害，如果最终伤害少于等于0 则显示[xx]没有受到伤害
-        else:
-            lost_life = self.__ATK - warrior.__DEF
-            if lost_life <= 0:
-                print('[{}]没有受到伤害'.format(warrior.__NAME))
-                            
-# (4) 显示剩余生命值，生命值等于现有生命值减去最终伤害，如果最终伤害大于生命值，显示[XX]已经挂了
-            elif lost_life > warrior.__LIFE:
-                print('[{}]受到了{}伤害,已经死了\n战斗结束,[{}]获胜'.format(warrior.__NAME,lost_life,self.__NAME))
-                os._exit(0)
-# （5）每次攻击以后，对方的类属性生命值相应发生改变，保留伤害后的生命值
+openai.api_key = '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'
+
+# Function to send a message to the OpenAI chatbot model and return its response
+# 发送消息给OpenAI的聊天机器人模型，并返回它的回复
+def send_message(message_log):
+    # Use OpenAI's ChatCompletion API to get the chatbot's response
+    # 使用OpenAI的ChatCompletion API来获取聊天机器人的回复
+    response = openai.ChatCompletion.create(
+        model="gpt-3.5-turbo",  # The name of the OpenAI chatbot model to use
+        # 这个模型是网页版OpenAI chatbot的模型
+        # The conversation history up to this point, as a list of dictionaries
+        # 将目前为止的对话历史记录，作为字典的列表
+        messages=message_log,
+        # The maximum number of tokens (words or subwords) in the generated response
+        # 最大的生成回复的token数 最大4095（单词或子单词）
+        # The stopping sequence for the generated response, if any (not used here)
+        # 停止生成回复的序列，如果有的话（这里没有使用）
+        stop=None,
+        # The "creativity" of the generated response (higher temperature = more creative)
+        # 生成回复的“创造性”（参数越高，创造性越强）
+        temperature=0.9,
+    )
+
+    # Find the first response from the chatbot that has text in it (some responses may not have text)
+    # 从聊天机器人的回复中，找到第一个有文本的回复（有些回复可能没有文本）
+    for choice in response.choices:
+        if "text" in choice:
+            return choice.text
+
+    # If no response with text is found, return the first response's content (which may be empty)
+    # 如果没有找到有文本的回复，返回第一个回复的内容（可能为空）
+    return response.choices[0].message.content
+
+
+# Main function that runs the chatbot
+def main():
+    try:
+            # Initialize the conversation history with a message from the chatbot
+        # 用聊天机器人的消息来初始化对话历史记录
+        message_log = [
+            {"role": "system", "content": "You are a helpful assistant."}
+        ]
+
+        # Set a flag to keep track of whether this is the first request in the conversation
+        # 设置一个标志来跟踪这是否是对话中的第一个请求
+        first_request = True
+
+        # Start a loop that runs until the user types "quit"
+        # 开始一个循环，直到用户输入“quit”为止
+        while True:
+            url = 'http://192.168.1.217:8080/fetchLatestMessage?sessionKey=9VJld7hp&count=10'
+            r = requests.get(url)
+            state=json.loads(r.text)['data']
+            print(state)
+            time.sleep(1)
+            try:
+                if(len(state) == 0):
+                    print('无数据')
+                    continue
+                elif(state[1]['friend']['id']==2622309188):
+                    
+                    print("收到信息{}".format(state[0]['messageChain'][1]['text']))
+                    dic = {
+                    "sessionKey":"9VJld7hp",
+                    "target":2622309188,
+                    "messageChain":[
+                        { "type":"Plain", "text":'收到信息:{},正在回答'.format(state[0]['messageChain'][1]['text']) }]
+                    }
+                    headers = {'Content-Type': 'application/json'}
+
+                    s = requests.post('http://192.168.1.217:8080/sendFriendMessage',headers=headers,data=json.dumps(dic))
+                    user_input = state[0]['messageChain'][1]['text']
+                else:
+                    print('无需回答')
+                    continue
+            except:
+                continue
+            if first_request:
+                # If this is the first request, get the user's input and add it to the conversation history
+                # 如果这是第一个请求，获取用户的输入，并将其添加到对话历史记录中
+                message_log.append({"role": "user", "content": user_input})
+
+                # Add a message from the chatbot to the conversation history
+                # 添加来自聊天机器人的消息到对话历史记录中
+                message_log.append(
+                    {"role": "assistant", "content": "You are a helpful assistant."})
+
+                # Send the conversation history to the chatbot and get its response
+                # 发送对话历史记录给聊天机器人，并获取它的回复
+                response = send_message(message_log)
+
+                # Add the chatbot's response to the conversation history and print it to the console
+                # 添加聊天机器人的回复到对话历史记录中，并将其打印到控制台
+                message_log.append({"role": "assistant", "content": response})
+                print(f"AI assistant: {response}")
+                dic = {
+                    "sessionKey":"9VJld7hp",
+                    "target":2622309188,
+                    "messageChain":[
+                        { "type":"Plain", "text":response }]
+                    }
+                headers = {'Content-Type': 'application/json'}
+
+                s = requests.post('http://192.168.1.217:8080/sendFriendMessage',headers=headers,data=json.dumps(dic))
+                print(s.text)
+                # Set the flag to False so that this branch is not executed again
+                # 设置标志为False，以便不再执行此分支
+                first_request = False
             else:
-                warrior.__LIFE -= lost_life
-                print('[{}]受到了{}伤害,生命值剩余{}/{}'.format(warrior.__NAME,lost_life,warrior.__LIFE,warrior.basiclife))
-    def show(self):
-        print('[{}]血量:{},攻击力{},防御力{}'.format(self.__NAME,self.__LIFE,self.__ATK,self.__DEF))
-    def awaken(self,name,life,atk,DEF):
-        self.__NAME = name 
-        self.__LIFE = life 
-        self.__ATK = atk 
-        self.__DEF = DEF
-        self.basiclife = life
-    def getName(self):
-        return self.__NAME
+                # If this is not the first request, get the user's input and add it to the conversation history
+                # 如果这不是第一个请求，获取用户的输入，并将其添加到对话历史记录中
+                # If the user types "quit", end the loop and print a goodbye message
+                # 如果用户输入“quit”，结束循环并打印再见消息
+                if user_input.lower() == "quit":
+                    print("Goodbye!")
+                    break
 
+                message_log.append({"role": "user", "content": user_input})
+
+                # Send the conversation history to the chatbot and get its response
+                # 发送对话历史记录给聊天机器人，并获取它的回复
+                response = send_message(message_log)
+
+                # Add the chatbot's response to the conversation history and print it to the console
+                # 添加聊天机器人的回复到对话历史记录中，并将其打印到控制台
+                message_log.append({"role": "assistant", "content": response})
+                print(f"AI assistant: {response}")
+                dic = {
+                    "sessionKey":"9VJld7hp",
+                    "target":2622309188,
+                    "messageChain":[
+                        { "type":"Plain", "text":response }]
+                    }
+                headers = {'Content-Type': 'application/json'}
+
+                s = requests.post('http://192.168.1.217:8080/sendFriendMessage',headers=headers,data=json.dumps(dic))
+                print(s.text)
+                print(f"AI assistant: {response}")
+    except Exception as e :
+        print(e)
+
+# Call the main function if this file is executed directly (not imported as a module)
 if __name__ == "__main__":
-    airou = warrior('airou',100,51,30)
-    aim = warrior('aim',100,70,50)
-    list = [airou,aim]
-    for warrior in list:
-        warrior.show()
-    while True:
-        changeflag = True
-        attack_act = list[0]
-        defend_act = list[1]
-        print('现在是[{}]的回合'.format(attack_act.getName()))
-        print('1.攻击\n2.展示双方状态\n3.觉醒\n4.逃跑')
-        do = input('请输入指令')
-        if do == '1':
-            attack_act.attack(defend_act)
-        elif do == '2':
-            attack_act.show()
-            defend_act.show()
-            changeflag = False
-        elif do == '3':
-            attack_act.awaken(attack_act.getName()+'max',200,255,250)
-        elif do == '4':
-            print('[{}]逃跑成功,战斗结束,胜利者为[{}]'.format(attack_act.getName(),defend_act.getName()))
-            os._exit(0)
-        else:
-            print('未找到指令,请重新输入')
-            changeflag = False
-        if changeflag == True:
-            list = list[::-1]
-        time.sleep(1)  
-    print('吴泽杰,339005200008220319,2020-03-30')
+    main()
